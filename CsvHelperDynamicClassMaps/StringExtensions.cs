@@ -3,13 +3,13 @@
     public static class StringExtensions
     {
         /// <summary>
-        /// Compares <paramref name="input" /> against <paramref name="target" />,  the comparison is case-sensitive.
+        /// Compares <paramref name="input" /> against <paramref name="target" />. The comparison is case-sensitive.
         /// </summary>
         /// <param name="input">
-        /// The input string
+        /// The input string.
         /// </param>
         /// <param name="target">
-        /// The target string
+        /// The target string.
         /// </param>
         public static bool IsEqualTo(this string input, string target)
         {
