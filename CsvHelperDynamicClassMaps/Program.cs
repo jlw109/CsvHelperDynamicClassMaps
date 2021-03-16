@@ -68,6 +68,10 @@ namespace CsvHelperDynamicClassMaps
             Console.ReadLine();
         }
 
+        /// <summary>
+        /// Goal is to not have any ClassMaps defined at compile time. Build all class maps at run time from collection of UserDefinedFieldForCsvMapper.
+        /// </summary>
+        /// <returns></returns>
         private static IEnumerable<Transaction> RunExampleWithDynamicMapping()
         {
             using var stream = new MemoryStream();
@@ -152,6 +156,8 @@ namespace CsvHelperDynamicClassMaps
                 {
                     var recursivePropertryRetrieval = GetProp(type, item.FieldName); // Not sure this is useful yet.
 
+                    //defaultClassMap.ReferenceMaps.Add(); Should we create member reference maps?
+
                     // Need to map member to Csv Field for nested properties.
 
                     //defaultClassMap.Map(m => m.TransactionId) // Given TModel generic type param, how to build Expression<Func<TModel, TMember>> at run time from information on hand?
@@ -189,6 +195,9 @@ namespace CsvHelperDynamicClassMaps
     }
 
     // Sample from https://github.com/JoshClose/CsvHelper/issues/441
+    /// <summary>
+    /// Preferred way to set up a class map. I believe this sets up the legacy way with References for you. See below TransactionMapWithReferences.
+    /// </summary>
     public class TransactionMap : ClassMap<Transaction>
     {
         public TransactionMap()
@@ -202,6 +211,9 @@ namespace CsvHelperDynamicClassMaps
         }
     }
 
+    /// <summary>
+    /// This is a legacy way of setting up the ClassMap. 
+    /// </summary>
     public class TransactionMapWithReferences : ClassMap<Transaction>
     {
         public TransactionMapWithReferences()
