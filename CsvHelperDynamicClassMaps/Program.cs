@@ -52,30 +52,13 @@ namespace CsvHelperDynamicClassMaps
             }
         };
 
-        private static LambdaExpression GenerateExpression<TModel>(string propertyName)
-        {
-            var parts = propertyName.Split('.');
-            var rootPropertyName = parts[0];
-
-            // Get a reference to the property
-            var propertyInfo = ExpressionHelper.GetPropertyInfo<TModel>(rootPropertyName);  //TModel = Transaction Product.Name
-            var model = ExpressionHelper.Parameter<TModel>();
-
-            // Build the LINQ expression tree backwards:
-            // x.Prop
-            var key = ExpressionHelper.GetPropertyExpression(model, propertyInfo);
-            // x => x.Prop
-            var keySelector = ExpressionHelper.GetLambda(typeof(TModel), propertyInfo.PropertyType, model, key);
-
-            return keySelector;
-        }
-
-        private static LambdaExpression GenerateExpression2<TModel>(string propertyName)
+        private static LambdaExpression GenerateExpressionForMappingMemberOfTModelToCsvField<TModel>(
+            string propertyName)
         {
             var model = ExpressionHelper.Parameter<TModel>();
             var memberExpression = model.GetMemberExpression(propertyName);
             var propertyInfo = memberExpression.Member as PropertyInfo;
-            var propAsPropertyType = Expression.Convert(memberExpression, propertyInfo.PropertyType);
+            //var propAsPropertyType = Expression.Convert(memberExpression, propertyInfo.PropertyType);
 
             // Need Expression<Func<TModel, TMember>>
             var keySelector = ExpressionHelper.GetLambda(
@@ -84,24 +67,11 @@ namespace CsvHelperDynamicClassMaps
                 model,
                 memberExpression);
 
-            var generic = typeof(Func<, >);
-            Type[] typeArgs = { typeof(TModel), propertyInfo.PropertyType };
-            var constructed = generic.MakeGenericType(typeArgs);
-
-            //var test = Expression.Lambda(constructed, memberExpression, Array.Empty<ParameterExpression>());
-
-            //var test = Expression.Lambda<Func<TModel, object>>(propAsPropertyType, model);
+            //var generic = typeof(Func<, >);
+            //Type[] typeArgs = { typeof(TModel), propertyInfo.PropertyType };
+            //var constructed = generic.MakeGenericType(typeArgs);
 
             return keySelector;
-        }
-
-        private static (Type type, PropertyInfo propertyInfo) GetProp(Type baseType, string propertyName)
-        {
-            var parts = propertyName.Split('.');
-
-            return (parts.Length > 1)
-                ? GetProp(baseType.GetProperty(parts[0]).PropertyType, parts.Skip(1).Aggregate((a, i) => $"{a}.{i}"))
-                : (baseType, baseType.GetProperty(propertyName));
         }
 
         static void Main(string[] args)
@@ -198,37 +168,100 @@ namespace CsvHelperDynamicClassMaps
                 }
                 else
                 {
-                    var recursivePropertryRetrieval = GetProp(type, item.FieldName); // Not sure this is useful yet.
-                    var test = GenerateExpression<TModel>(item.FieldName);
-                    var test2 = GenerateExpression2<TModel>(item.FieldName);
-
-                    var expressionOfFuncReturnsString = test2 as Expression<Func<TModel, string>>;
-                    var expressionOfFuncReturnsDateTime = test2 as Expression<Func<TModel, DateTime>>;
-
-                    //defaultClassMap.Map(test);
-
-                    //defaultClassMap.ReferenceMaps.Add(); Should we create member reference maps?
-
                     // Need to map member to Csv Field for nested properties.
+                    var generatedLamdaExpressionForMapppingMemberToCsvField = GenerateExpressionForMappingMemberOfTModelToCsvField<TModel>(
+                        item.FieldName);
+
+                    //Handle most system types.
+                    var expressionOfFuncReturnsString = generatedLamdaExpressionForMapppingMemberToCsvField as Expression<Func<TModel, string>>;
+                    var expressionOfFuncReturnsDateTime = generatedLamdaExpressionForMapppingMemberToCsvField as Expression<Func<TModel, DateTime>>;
+                    var expressionOfFuncReturnsNullableDateTime = generatedLamdaExpressionForMapppingMemberToCsvField as Expression<Func<TModel, DateTime?>>;
+                    var expressionOfFuncReturnsDecimal = generatedLamdaExpressionForMapppingMemberToCsvField as Expression<Func<TModel, decimal>>;
+                    var expressionOfFuncReturnsNullableDecimal = generatedLamdaExpressionForMapppingMemberToCsvField as Expression<Func<TModel, decimal?>>;
+                    var expressionOfFuncReturnsDouble = generatedLamdaExpressionForMapppingMemberToCsvField as Expression<Func<TModel, double>>;
+                    var expressionOfFuncReturnsNullableDouble = generatedLamdaExpressionForMapppingMemberToCsvField as Expression<Func<TModel, double?>>;
+                    var expressionOfFuncReturnsInt = generatedLamdaExpressionForMapppingMemberToCsvField as Expression<Func<TModel, int>>;
+                    var expressionOfFuncReturnsNullableInt = generatedLamdaExpressionForMapppingMemberToCsvField as Expression<Func<TModel, int?>>;
+                    var expressionOfFuncReturnsGuid = generatedLamdaExpressionForMapppingMemberToCsvField as Expression<Func<TModel, Guid>>;
+                    var expressionOfFuncReturnsNullableGuid = generatedLamdaExpressionForMapppingMemberToCsvField as Expression<Func<TModel, Guid?>>;
 
                     if (expressionOfFuncReturnsString is not null)
                     {
-                        defaultClassMap.Map(expressionOfFuncReturnsString) // Given TModel generic type param, how to build Expression<Func<TModel, TMember>> at run time from information on hand?
+                        defaultClassMap.Map(expressionOfFuncReturnsString) // Given TModel generic type param, how to build Expression<Func<TModel, TMember>> at run time from information on hand, given TMember is of type string?
                             .Name(GetUserDefinedFieldName(item.FieldName))
                             .Ignore(ShouldIgnore(item.FieldName))
                             .Index(GetIndex(item.FieldName));
                     }
                     if (expressionOfFuncReturnsDateTime is not null)
                     {
-                        defaultClassMap.Map(expressionOfFuncReturnsDateTime) // Given TModel generic type param, how to build Expression<Func<TModel, TMember>> at run time from information on hand?
+                        defaultClassMap.Map(expressionOfFuncReturnsDateTime)
                             .Name(GetUserDefinedFieldName(item.FieldName))
                             .Ignore(ShouldIgnore(item.FieldName))
                             .Index(GetIndex(item.FieldName));
                     }
-
-                    // Should we create an Expression<Func<TClass, TMember>>? How to infer both TClass and TMember?
-                    // Should we build a class map for each type and use Reference maps? How?
-                    // Should we split UserDefinedFieldForCsvMapper.FieldName into parts with var parts = propertyName.Split('.'); and process from here? How?
+                    if (expressionOfFuncReturnsNullableDateTime is not null)
+                    {
+                        defaultClassMap.Map(expressionOfFuncReturnsNullableDateTime)
+                            .Name(GetUserDefinedFieldName(item.FieldName))
+                            .Ignore(ShouldIgnore(item.FieldName))
+                            .Index(GetIndex(item.FieldName));
+                    }
+                    if (expressionOfFuncReturnsDecimal is not null)
+                    {
+                        defaultClassMap.Map(expressionOfFuncReturnsDecimal)
+                            .Name(GetUserDefinedFieldName(item.FieldName))
+                            .Ignore(ShouldIgnore(item.FieldName))
+                            .Index(GetIndex(item.FieldName));
+                    }
+                    if (expressionOfFuncReturnsNullableDecimal is not null)
+                    {
+                        defaultClassMap.Map(expressionOfFuncReturnsNullableDecimal)
+                            .Name(GetUserDefinedFieldName(item.FieldName))
+                            .Ignore(ShouldIgnore(item.FieldName))
+                            .Index(GetIndex(item.FieldName));
+                    }
+                    if (expressionOfFuncReturnsDouble is not null)
+                    {
+                        defaultClassMap.Map(expressionOfFuncReturnsDouble)
+                            .Name(GetUserDefinedFieldName(item.FieldName))
+                            .Ignore(ShouldIgnore(item.FieldName))
+                            .Index(GetIndex(item.FieldName));
+                    }
+                    if (expressionOfFuncReturnsNullableDouble is not null)
+                    {
+                        defaultClassMap.Map(expressionOfFuncReturnsNullableDouble)
+                            .Name(GetUserDefinedFieldName(item.FieldName))
+                            .Ignore(ShouldIgnore(item.FieldName))
+                            .Index(GetIndex(item.FieldName));
+                    }
+                    if (expressionOfFuncReturnsInt is not null)
+                    {
+                        defaultClassMap.Map(expressionOfFuncReturnsInt)
+                            .Name(GetUserDefinedFieldName(item.FieldName))
+                            .Ignore(ShouldIgnore(item.FieldName))
+                            .Index(GetIndex(item.FieldName));
+                    }
+                    if (expressionOfFuncReturnsNullableInt is not null)
+                    {
+                        defaultClassMap.Map(expressionOfFuncReturnsNullableInt)
+                            .Name(GetUserDefinedFieldName(item.FieldName))
+                            .Ignore(ShouldIgnore(item.FieldName))
+                            .Index(GetIndex(item.FieldName));
+                    }
+                    if (expressionOfFuncReturnsGuid is not null)
+                    {
+                        defaultClassMap.Map(expressionOfFuncReturnsGuid)
+                            .Name(GetUserDefinedFieldName(item.FieldName))
+                            .Ignore(ShouldIgnore(item.FieldName))
+                            .Index(GetIndex(item.FieldName));
+                    }
+                    if (expressionOfFuncReturnsNullableGuid is not null)
+                    {
+                        defaultClassMap.Map(expressionOfFuncReturnsNullableGuid)
+                            .Name(GetUserDefinedFieldName(item.FieldName))
+                            .Ignore(ShouldIgnore(item.FieldName))
+                            .Index(GetIndex(item.FieldName));
+                    }
                 }
             }
 
@@ -273,14 +306,6 @@ namespace CsvHelperDynamicClassMaps
 
             return propInfo;
         }
-
-        //private static Expression<Func<TClass, TMember>> GenerateExpression<TClass, TMember>(Type containerType, string propertyName, string nestedPropertyName) {
-        //    var parameterExpression = Expression.Parameter(containerType, "container");
-        //    var property = Expression.Property(parameterExpression, propertyName);
-        //    var nestedProperty = Expression.Property(property, nestedPropertyName);
-        //    var lambda = Expression.Lambda<Func<TClass, TMember>>(nestedProperty, parameterExpression);
-        //    return lambda;
-        //}
     }
 
     // Sample from https://github.com/JoshClose/CsvHelper/issues/441
