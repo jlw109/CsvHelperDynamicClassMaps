@@ -79,6 +79,9 @@ namespace CsvHelperDynamicClassMaps
             var dataFromExample1 = RunExampleWithStaticMapping();
             var dataFromExample2 = RunExampleWithStaticMappingUsingReferences();
             var dataFromExample3 = RunExampleWithDynamicMapping();
+            var doesExample1EqualExample2 = dataFromExample1.FirstOrDefault().Equals(dataFromExample2.FirstOrDefault());
+            var doesExample1EqualExample3 = dataFromExample1.FirstOrDefault().Equals(dataFromExample3.FirstOrDefault());
+
             Console.ReadLine();
         }
 
