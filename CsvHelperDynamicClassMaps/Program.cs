@@ -5,6 +5,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Linq.Expressions;
 using System.Reflection;
 
 namespace CsvHelperDynamicClassMaps
@@ -50,6 +51,49 @@ namespace CsvHelperDynamicClassMaps
                 FieldName = $"Promotion.Price"
             }
         };
+
+        private static LambdaExpression GenerateExpression<TModel>(string propertyName)
+        {
+            var parts = propertyName.Split('.');
+            var rootPropertyName = parts[0];
+
+            // Get a reference to the property
+            var propertyInfo = ExpressionHelper.GetPropertyInfo<TModel>(rootPropertyName);  //TModel = Transaction Product.Name
+            var model = ExpressionHelper.Parameter<TModel>();
+
+            // Build the LINQ expression tree backwards:
+            // x.Prop
+            var key = ExpressionHelper.GetPropertyExpression(model, propertyInfo);
+            // x => x.Prop
+            var keySelector = ExpressionHelper.GetLambda(typeof(TModel), propertyInfo.PropertyType, model, key);
+
+            return keySelector;
+        }
+
+        private static LambdaExpression GenerateExpression2<TModel>(string propertyName)
+        {
+            var model = ExpressionHelper.Parameter<TModel>();
+            var memberExpression = model.GetMemberExpression(propertyName);
+            var propertyInfo = memberExpression.Member as PropertyInfo;
+            var propAsPropertyType = Expression.Convert(memberExpression, propertyInfo.PropertyType);
+
+            // Need Expression<Func<TModel, TMember>>
+            var keySelector = ExpressionHelper.GetLambda(
+                typeof(TModel),
+                propertyInfo.PropertyType,
+                model,
+                memberExpression);
+
+            var generic = typeof(Func<, >);
+            Type[] typeArgs = { typeof(TModel), propertyInfo.PropertyType };
+            var constructed = generic.MakeGenericType(typeArgs);
+
+            //var test = Expression.Lambda(constructed, memberExpression, Array.Empty<ParameterExpression>());
+
+            //var test = Expression.Lambda<Func<TModel, object>>(propAsPropertyType, model);
+
+            return keySelector;
+        }
 
         private static (Type type, PropertyInfo propertyInfo) GetProp(Type baseType, string propertyName)
         {
@@ -155,15 +199,32 @@ namespace CsvHelperDynamicClassMaps
                 else
                 {
                     var recursivePropertryRetrieval = GetProp(type, item.FieldName); // Not sure this is useful yet.
+                    var test = GenerateExpression<TModel>(item.FieldName);
+                    var test2 = GenerateExpression2<TModel>(item.FieldName);
+
+                    var expressionOfFuncReturnsString = test2 as Expression<Func<TModel, string>>;
+                    var expressionOfFuncReturnsDateTime = test2 as Expression<Func<TModel, DateTime>>;
+
+                    //defaultClassMap.Map(test);
 
                     //defaultClassMap.ReferenceMaps.Add(); Should we create member reference maps?
 
                     // Need to map member to Csv Field for nested properties.
 
-                    //defaultClassMap.Map(m => m.TransactionId) // Given TModel generic type param, how to build Expression<Func<TModel, TMember>> at run time from information on hand?
-                    //    .Name(GetUserDefinedFieldName(item.FieldName))
-                    //    .Ignore(ShouldIgnore(item.FieldName))
-                    //    .Index(GetIndex(item.FieldName));
+                    if (expressionOfFuncReturnsString is not null)
+                    {
+                        defaultClassMap.Map(expressionOfFuncReturnsString) // Given TModel generic type param, how to build Expression<Func<TModel, TMember>> at run time from information on hand?
+                            .Name(GetUserDefinedFieldName(item.FieldName))
+                            .Ignore(ShouldIgnore(item.FieldName))
+                            .Index(GetIndex(item.FieldName));
+                    }
+                    if (expressionOfFuncReturnsDateTime is not null)
+                    {
+                        defaultClassMap.Map(expressionOfFuncReturnsDateTime) // Given TModel generic type param, how to build Expression<Func<TModel, TMember>> at run time from information on hand?
+                            .Name(GetUserDefinedFieldName(item.FieldName))
+                            .Ignore(ShouldIgnore(item.FieldName))
+                            .Index(GetIndex(item.FieldName));
+                    }
 
                     // Should we create an Expression<Func<TClass, TMember>>? How to infer both TClass and TMember?
                     // Should we build a class map for each type and use Reference maps? How?
@@ -183,6 +244,34 @@ namespace CsvHelperDynamicClassMaps
                 1;
 
             return defaultClassMap;
+        }
+
+        public static PropertyInfo GetPropertyInfo<TSource, TProperty>(
+            TSource source,
+            Expression<Func<TSource, TProperty>> propertyLambda)
+        {
+            var type = typeof(TSource);
+
+            if (propertyLambda.Body is not MemberExpression member)
+            {
+                throw new ArgumentException(
+                    $"Expression '{propertyLambda.ToString()}' refers to a method, not a property.");
+            }
+
+            var propInfo = member.Member as PropertyInfo;
+            if (propInfo is null)
+            {
+                throw new ArgumentException(
+                    $"Expression '{propertyLambda.ToString()}' refers to a field, not a property.");
+            }
+
+            if (type != propInfo.ReflectedType && !type.IsSubclassOf(propInfo.ReflectedType))
+            {
+                throw new ArgumentException(
+                    $"Expression '{propertyLambda.ToString()}' refers to a property that is not from type {type}.");
+            }
+
+            return propInfo;
         }
 
         //private static Expression<Func<TClass, TMember>> GenerateExpression<TClass, TMember>(Type containerType, string propertyName, string nestedPropertyName) {
