@@ -187,6 +187,8 @@ namespace CsvHelperDynamicClassMaps
                     var expressionOfFuncReturnsNullableInt = generatedLamdaExpressionForMapppingMemberToCsvField as Expression<Func<TModel, int?>>;
                     var expressionOfFuncReturnsGuid = generatedLamdaExpressionForMapppingMemberToCsvField as Expression<Func<TModel, Guid>>;
                     var expressionOfFuncReturnsNullableGuid = generatedLamdaExpressionForMapppingMemberToCsvField as Expression<Func<TModel, Guid?>>;
+                    var expressionOfFuncReturnsBool = generatedLamdaExpressionForMapppingMemberToCsvField as Expression<Func<TModel, bool>>;
+                    var expressionOfFuncReturnsNullableBool = generatedLamdaExpressionForMapppingMemberToCsvField as Expression<Func<TModel, bool?>>;
 
                     if (expressionOfFuncReturnsString is not null)
                     {
@@ -261,6 +263,20 @@ namespace CsvHelperDynamicClassMaps
                     if (expressionOfFuncReturnsNullableGuid is not null)
                     {
                         defaultClassMap.Map(expressionOfFuncReturnsNullableGuid)
+                            .Name(GetUserDefinedFieldName(item.FieldName))
+                            .Ignore(ShouldIgnore(item.FieldName))
+                            .Index(GetIndex(item.FieldName));
+                    }
+                    if (expressionOfFuncReturnsBool is not null)
+                    {
+                        defaultClassMap.Map(expressionOfFuncReturnsBool)
+                            .Name(GetUserDefinedFieldName(item.FieldName))
+                            .Ignore(ShouldIgnore(item.FieldName))
+                            .Index(GetIndex(item.FieldName));
+                    }
+                    if (expressionOfFuncReturnsNullableBool is not null)
+                    {
+                        defaultClassMap.Map(expressionOfFuncReturnsNullableBool)
                             .Name(GetUserDefinedFieldName(item.FieldName))
                             .Ignore(ShouldIgnore(item.FieldName))
                             .Index(GetIndex(item.FieldName));
